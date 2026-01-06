@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ReactFlow, {
   Node,
   Edge,
@@ -10,71 +10,105 @@ import ReactFlow, {
   useNodesState,
   useEdgesState,
   Panel,
+  NodeMouseHandler,
 } from "reactflow";
 import "reactflow/dist/style.css";
-import { Download, FileJson, Image as ImageIcon, Loader2 } from "lucide-react";
+import {
+  Download,
+  FileJson,
+  Image as ImageIcon,
+  Loader2,
+  Edit3,
+  Save,
+  PlusCircle,
+  Trash2
+} from "lucide-react";
 import { toPng } from "html-to-image";
 import { MindmapData, MindmapNode } from "@/types/mindmap";
 
 interface MindmapViewerProps {
   mindmapData: MindmapData | null;
   isLoading: boolean;
+  isEditable?: boolean;
+  onChange?: (data: MindmapData) => void;
 }
 
-export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+interface NodeData {
+  label: string;
+  mindmapId: string;
+  level: number;
+}
+
+export function MindmapViewer({
+  mindmapData,
+  isLoading,
+  isEditable = false,
+  onChange
+}: MindmapViewerProps) {
+  const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [editMode, setEditMode] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+  const [editingLabel, setEditingLabel] = useState("");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
-  const convertToReactFlowNodes = useCallback((data: MindmapData): { nodes: Node[]; edges: Edge[] } => {
-    const nodes: Node[] = [];
+  // MindmapNode IDからReact Flow NodeへのマッピングMap
+  const [nodeIdMap, setNodeIdMap] = useState<Map<string, string>>(new Map());
+
+  const convertToReactFlowNodes = useCallback((data: MindmapData): {
+    nodes: Node<NodeData>[];
+    edges: Edge[];
+    idMap: Map<string, string>;
+  } => {
+    const nodes: Node<NodeData>[] = [];
     const edges: Edge[] = [];
-    let nodeId = 0;
+    const idMap = new Map<string, string>();
+    let nodeCounter = 0;
 
     const processNode = (
       node: MindmapNode,
       level: number,
-      parentId: string | null,
+      parentFlowId: string | null,
       parentX: number,
       parentY: number,
       siblingIndex: number,
       totalSiblings: number
     ) => {
-      const id = `node-${nodeId++}`;
+      const flowId = `flow-node-${nodeCounter++}`;
+      idMap.set(node.id, flowId);
 
-      // 階層ごとの水平間隔と垂直間隔
       const horizontalSpacing = 250;
       const verticalSpacing = 100;
-
-      // X座標: 階層レベルに基づいて配置
       const x = level * horizontalSpacing;
 
-      // Y座標: 兄弟ノード間で均等に配置
       let y: number;
       if (level === 0) {
-        y = 300; // ルートノードは中央
+        y = 300;
       } else {
         const totalHeight = (totalSiblings - 1) * verticalSpacing;
         const startY = parentY - totalHeight / 2;
         y = startY + siblingIndex * verticalSpacing;
       }
 
-      // ノードの色を階層ごとに変える
       const colors = [
-        { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" }, // ルート: 青
-        { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" }, // レベル1: 紫
-        { bg: "#ec4899", border: "#db2777", text: "#ffffff" }, // レベル2: ピンク
-        { bg: "#f59e0b", border: "#d97706", text: "#ffffff" }, // レベル3: オレンジ
-        { bg: "#10b981", border: "#059669", text: "#ffffff" }, // レベル4+: 緑
+        { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" },
+        { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" },
+        { bg: "#ec4899", border: "#db2777", text: "#ffffff" },
+        { bg: "#f59e0b", border: "#d97706", text: "#ffffff" },
+        { bg: "#10b981", border: "#059669", text: "#ffffff" },
       ];
       const color = colors[Math.min(level, colors.length - 1)];
 
       nodes.push({
-        id,
+        id: flowId,
         type: "default",
         position: { x, y },
         data: {
           label: node.label,
+          mindmapId: node.id,
+          level,
         },
         style: {
           background: color.bg,
@@ -86,14 +120,15 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
           fontWeight: level === 0 ? "bold" : "normal",
           minWidth: "150px",
           textAlign: "center",
+          cursor: editMode ? "pointer" : "grab",
         },
       });
 
-      if (parentId) {
+      if (parentFlowId) {
         edges.push({
-          id: `edge-${parentId}-${id}`,
-          source: parentId,
-          target: id,
+          id: `edge-${parentFlowId}-${flowId}`,
+          source: parentFlowId,
+          target: flowId,
           type: "smoothstep",
           animated: level === 1,
           style: {
@@ -105,27 +140,130 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
 
       if (node.children && node.children.length > 0) {
         node.children.forEach((child, index) => {
-          processNode(child, level + 1, id, x, y, index, node.children!.length);
+          processNode(child, level + 1, flowId, x, y, index, node.children!.length);
         });
       }
     };
 
     processNode(data.root, 0, null, 0, 300, 0, 1);
-
-    return { nodes, edges };
-  }, []);
+    return { nodes, edges, idMap };
+  }, [editMode]);
 
   useEffect(() => {
     if (mindmapData) {
-      const { nodes: newNodes, edges: newEdges } = convertToReactFlowNodes(mindmapData);
+      const { nodes: newNodes, edges: newEdges, idMap } = convertToReactFlowNodes(mindmapData);
       setNodes(newNodes);
       setEdges(newEdges);
+      setNodeIdMap(idMap);
     }
   }, [mindmapData, convertToReactFlowNodes, setNodes, setEdges]);
 
+  const findNodeById = useCallback((data: MindmapNode, id: string): MindmapNode | null => {
+    if (data.id === id) return data;
+    if (data.children) {
+      for (const child of data.children) {
+        const found = findNodeById(child, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }, []);
+
+  const updateNodeLabel = useCallback((data: MindmapNode, id: string, newLabel: string): MindmapNode => {
+    if (data.id === id) {
+      return { ...data, label: newLabel };
+    }
+    if (data.children) {
+      return {
+        ...data,
+        children: data.children.map(child => updateNodeLabel(child, id, newLabel))
+      };
+    }
+    return data;
+  }, []);
+
+  const addChildNode = useCallback((data: MindmapNode, parentId: string): MindmapNode => {
+    if (data.id === parentId) {
+      const newChild: MindmapNode = {
+        id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        label: "新しいノード",
+        children: []
+      };
+      return {
+        ...data,
+        children: [...(data.children || []), newChild]
+      };
+    }
+    if (data.children) {
+      return {
+        ...data,
+        children: data.children.map(child => addChildNode(child, parentId))
+      };
+    }
+    return data;
+  }, []);
+
+  const deleteNode = useCallback((data: MindmapNode, id: string): MindmapNode | null => {
+    if (data.id === id) return null;
+    if (data.children) {
+      const filteredChildren = data.children
+        .map(child => deleteNode(child, id))
+        .filter((child): child is MindmapNode => child !== null);
+      return { ...data, children: filteredChildren };
+    }
+    return data;
+  }, []);
+
+  const handleNodeDoubleClick: NodeMouseHandler = useCallback((event, node) => {
+    if (!editMode || !isEditable) return;
+    const nodeData = node.data as NodeData;
+    setEditingNodeId(nodeData.mindmapId);
+    setEditingLabel(nodeData.label);
+  }, [editMode, isEditable]);
+
+  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    if (!editMode || !isEditable) return;
+    event.preventDefault();
+    const nodeData = node.data as NodeData;
+    setContextMenu({ x: event.clientX, y: event.clientY, nodeId: nodeData.mindmapId });
+    setSelectedNodeId(nodeData.mindmapId);
+  }, [editMode, isEditable]);
+
+  const handleSaveEdit = useCallback(() => {
+    if (!editingNodeId || !mindmapData || !onChange) return;
+    const updatedData = { root: updateNodeLabel(mindmapData.root, editingNodeId, editingLabel) };
+    onChange(updatedData);
+    setEditingNodeId(null);
+    setEditingLabel("");
+  }, [editingNodeId, editingLabel, mindmapData, onChange, updateNodeLabel]);
+
+  const handleAddChild = useCallback(() => {
+    if (!selectedNodeId || !mindmapData || !onChange) return;
+    const updatedData = { root: addChildNode(mindmapData.root, selectedNodeId) };
+    onChange(updatedData);
+    setContextMenu(null);
+  }, [selectedNodeId, mindmapData, onChange, addChildNode]);
+
+  const handleDelete = useCallback(() => {
+    if (!selectedNodeId || !mindmapData || !onChange || selectedNodeId === mindmapData.root.id) {
+      alert("ルートノードは削除できません");
+      return;
+    }
+    const updatedData = deleteNode(mindmapData.root, selectedNodeId);
+    if (updatedData) {
+      onChange({ root: updatedData });
+    }
+    setContextMenu(null);
+  }, [selectedNodeId, mindmapData, onChange, deleteNode]);
+
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    window.addEventListener("click", handleClickOutside);
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, []);
+
   const exportAsJSON = useCallback(() => {
     if (!mindmapData) return;
-
     const dataStr = JSON.stringify(mindmapData, null, 2);
     const blob = new Blob([dataStr], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -138,7 +276,6 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
 
   const exportAsPNG = useCallback(() => {
     if (!reactFlowWrapper.current) return;
-
     const element = reactFlowWrapper.current.querySelector(".react-flow__viewport") as HTMLElement;
     if (!element) return;
 
@@ -183,6 +320,20 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
           🗺️ マインドマップ
         </h2>
         <div className="flex gap-2">
+          {isEditable && (
+            <button
+              onClick={() => setEditMode(!editMode)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+                editMode
+                  ? "bg-blue-600 hover:bg-blue-700 text-white"
+                  : "bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-white"
+              }`}
+              title="編集モード"
+            >
+              {editMode ? <Save className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+              {editMode ? "編集中" : "編集"}
+            </button>
+          )}
           <button
             onClick={exportAsJSON}
             className="flex items-center gap-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm transition-colors"
@@ -202,12 +353,14 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
         </div>
       </div>
 
-      <div ref={reactFlowWrapper} className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+      <div ref={reactFlowWrapper} className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 relative">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
+          onNodeDoubleClick={handleNodeDoubleClick}
+          onNodeContextMenu={handleNodeContextMenu}
           fitView
           attributionPosition="bottom-left"
         >
@@ -219,9 +372,70 @@ export function MindmapViewer({ mindmapData, isLoading }: MindmapViewerProps) {
             }}
           />
           <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg text-sm text-gray-600 dark:text-gray-300">
-            <div>💡 ドラッグで移動、マウスホイールでズーム</div>
+            <div>
+              {editMode ? "✏️ ダブルクリックで編集、右クリックでメニュー" : "💡 ドラッグで移動、マウスホイールでズーム"}
+            </div>
           </Panel>
         </ReactFlow>
+
+        {contextMenu && editMode && (
+          <div
+            className="absolute bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 py-1 z-50"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <button
+              onClick={handleAddChild}
+              className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-800 dark:text-white w-full text-left text-sm"
+            >
+              <PlusCircle className="w-4 h-4" />
+              子ノードを追加
+            </button>
+            {selectedNodeId !== mindmapData.root.id && (
+              <button
+                onClick={handleDelete}
+                className="flex items-center gap-2 px-4 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 w-full text-left text-sm"
+              >
+                <Trash2 className="w-4 h-4" />
+                削除
+              </button>
+            )}
+          </div>
+        )}
+
+        {editingNodeId && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-96">
+              <h3 className="text-lg font-semibold text-gray-800 dark:text-white mb-4">
+                ノードを編集
+              </h3>
+              <input
+                type="text"
+                value={editingLabel}
+                onChange={(e) => setEditingLabel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-800 dark:text-white mb-4"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveEdit();
+                  if (e.key === "Escape") setEditingNodeId(null);
+                }}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setEditingNodeId(null)}
+                  className="px-4 py-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-lg"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg"
+                >
+                  保存
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
