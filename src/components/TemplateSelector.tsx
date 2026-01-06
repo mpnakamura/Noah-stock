@@ -1,7 +1,7 @@
 "use client";
 
 import { Template } from "@/types/mindmap";
-import { templates } from "@/lib/templates";
+import { pmTemplates } from "@/lib/pm-templates";
 import { BookTemplate } from "lucide-react";
 
 interface TemplateSelectorProps {
@@ -14,12 +14,15 @@ export function TemplateSelector({ onSelectTemplate }: TemplateSelectorProps) {
       <div className="flex items-center gap-2 mb-3">
         <BookTemplate className="w-5 h-5 text-gray-700 dark:text-gray-300" />
         <h3 className="text-lg font-semibold text-gray-800 dark:text-white">
-          テンプレートから始める
+          PMテンプレート
         </h3>
       </div>
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+        実践的なPM業務のテンプレートから始められます
+      </p>
 
-      <div className="grid grid-cols-2 gap-3">
-        {templates.map((template) => (
+      <div className="grid grid-cols-1 gap-3">
+        {pmTemplates.map((template) => (
           <button
             key={template.id}
             onClick={() => onSelectTemplate(template)}

@@ -32,3 +32,15 @@ export interface Template {
   data: MindmapData;
   icon: string;
 }
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+}
+
+export interface ChatHistory {
+  mindmapId: string;
+  messages: ChatMessage[];
+}

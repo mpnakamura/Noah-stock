@@ -5,6 +5,7 @@ import { MindmapGenerator } from "@/components/MindmapGenerator";
 import { MindmapViewer } from "@/components/MindmapViewer";
 import { TemplateSelector } from "@/components/TemplateSelector";
 import { HistoryPanel } from "@/components/HistoryPanel";
+import { ChatPanel } from "@/components/ChatPanel";
 import { MindmapData, Template, SavedMindmap } from "@/types/mindmap";
 import { saveToHistory } from "@/lib/storage";
 import { Save } from "lucide-react";
@@ -73,14 +74,14 @@ export default function Home() {
       <div className="container mx-auto px-4 py-8">
         <header className="mb-8 text-center">
           <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
-            🧠 AI Mindmap Generator
+            🎯 AI PM Assistant
           </h1>
           <p className="text-gray-600 dark:text-gray-300">
-            Phase 2: 編集、テンプレート、履歴機能が追加されました
+            Phase 2.5: PM業務を支援する対話型マインドマップツール
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* 左側: 入力フォーム、テンプレート、履歴 */}
           <div className="space-y-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
@@ -102,8 +103,8 @@ export default function Home() {
             </div>
           </div>
 
-          {/* 右側: マインドマップ表示 */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8 lg:self-start">
+          {/* 中央: マインドマップ表示 */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
             {mindmapData && !isLoading && (
               <div className="flex items-center gap-2 mb-4">
                 <button
@@ -127,6 +128,14 @@ export default function Home() {
               isLoading={isLoading}
               isEditable={true}
               onChange={handleMindmapChange}
+            />
+          </div>
+
+          {/* 右側: AIチャット */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 lg:sticky lg:top-8 lg:self-start" style={{ minHeight: "600px" }}>
+            <ChatPanel
+              mindmapData={mindmapData}
+              onMindmapUpdate={handleMindmapChange}
             />
           </div>
         </div>
