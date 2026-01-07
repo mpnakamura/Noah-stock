@@ -117,6 +117,8 @@ export function MindmapViewer({
           mindmapId: node.id,
           level,
         },
+        sourcePosition: Position.Right,  // このノードから出る線は右側
+        targetPosition: Position.Left,   // このノードに入る線は左側
         style: {
           background: color.bg,
           color: color.text,
@@ -138,13 +140,11 @@ export function MindmapViewer({
           target: flowId,
           type: "smoothstep",
           animated: level === 1,
-          sourcePosition: 'right' as any,  // 親ノードの右側から線が出る
-          targetPosition: 'left' as any,   // 子ノードの左側に線が入る
           style: {
             stroke: color.border,
             strokeWidth: 2,
           },
-        } as Edge);
+        });
       }
 
       if (node.children && node.children.length > 0) {
