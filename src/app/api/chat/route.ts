@@ -90,7 +90,7 @@ ${JSON.stringify(currentMindmap, null, 2)}
     });
 
     const response = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-latest",
+      model: "claude-3-sonnet-20240229",
       max_tokens: 4096,
       temperature: 0.7,
       system: CHAT_SYSTEM_PROMPT,

@@ -67,6 +67,10 @@ export function MindmapViewer({
     const idMap = new Map<string, string>();
     let nodeCounter = 0;
 
+    // 四方向のレイアウト用の方向定義
+    type Direction = 'top' | 'right' | 'bottom' | 'left';
+    const directions: Direction[] = ['right', 'bottom', 'left', 'top'];
+
     const processNode = (
       node: MindmapNode,
       level: number,
@@ -74,22 +78,61 @@ export function MindmapViewer({
       parentX: number,
       parentY: number,
       siblingIndex: number,
-      totalSiblings: number
+      totalSiblings: number,
+      direction?: Direction
     ) => {
       const flowId = `flow-node-${nodeCounter++}`;
       idMap.set(node.id, flowId);
 
-      const horizontalSpacing = 250;
-      const verticalSpacing = 100;
-      const x = level * horizontalSpacing;
-
+      let x: number;
       let y: number;
+
       if (level === 0) {
-        y = 300;
+        // ルートノードは中央に配置
+        x = 0;
+        y = 0;
+      } else if (level === 1) {
+        // 第1階層は四方向に配置
+        const baseDistance = 300;
+        const dir = directions[siblingIndex % 4];
+
+        switch (dir) {
+          case 'top':
+            x = parentX;
+            y = parentY - baseDistance;
+            break;
+          case 'right':
+            x = parentX + baseDistance;
+            y = parentY;
+            break;
+          case 'bottom':
+            x = parentX;
+            y = parentY + baseDistance;
+            break;
+          case 'left':
+            x = parentX - baseDistance;
+            y = parentY;
+            break;
+        }
+        direction = dir;
       } else {
-        const totalHeight = (totalSiblings - 1) * verticalSpacing;
-        const startY = parentY - totalHeight / 2;
-        y = startY + siblingIndex * verticalSpacing;
+        // 第2階層以降は親の方向に沿って配置
+        const horizontalSpacing = 250;
+        const verticalSpacing = 120;
+
+        if (direction === 'top' || direction === 'bottom') {
+          // 上下方向の場合は横に広がる
+          const totalWidth = (totalSiblings - 1) * verticalSpacing;
+          const startX = parentX - totalWidth / 2;
+          x = startX + siblingIndex * verticalSpacing;
+          y = direction === 'top' ? parentY - horizontalSpacing : parentY + horizontalSpacing;
+        } else {
+          // 左右方向の場合は縦に広がる
+          const totalHeight = (totalSiblings - 1) * verticalSpacing;
+          const startY = parentY - totalHeight / 2;
+          y = startY + siblingIndex * verticalSpacing;
+          x = direction === 'right' ? parentX + horizontalSpacing : parentX - horizontalSpacing;
+        }
       }
 
       const colors = [
@@ -140,12 +183,12 @@ export function MindmapViewer({
 
       if (node.children && node.children.length > 0) {
         node.children.forEach((child, index) => {
-          processNode(child, level + 1, flowId, x, y, index, node.children!.length);
+          processNode(child, level + 1, flowId, x, y, index, node.children!.length, direction);
         });
       }
     };
 
-    processNode(data.root, 0, null, 0, 300, 0, 1);
+    processNode(data.root, 0, null, 0, 0, 0, 1);
     return { nodes, edges, idMap };
   }, [editMode]);
 
