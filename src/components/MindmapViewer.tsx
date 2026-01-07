@@ -11,6 +11,7 @@ import ReactFlow, {
   useEdgesState,
   Panel,
   NodeMouseHandler,
+  Position,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import {
@@ -137,11 +138,13 @@ export function MindmapViewer({
           target: flowId,
           type: "smoothstep",
           animated: level === 1,
+          sourcePosition: Position.Right as any,  // 親ノードの右側から線が出る
+          targetPosition: Position.Left as any,   // 子ノードの左側に線が入る
           style: {
             stroke: color.border,
             strokeWidth: 2,
           },
-        });
+        } as Edge);
       }
 
       if (node.children && node.children.length > 0) {
