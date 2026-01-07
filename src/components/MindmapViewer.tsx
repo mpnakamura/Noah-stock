@@ -22,7 +22,7 @@ import {
   Edit3,
   Save,
   PlusCircle,
-  Trash2
+  Trash2,
 } from "lucide-react";
 import { toPng } from "html-to-image";
 import { MindmapData, MindmapNode } from "@/types/mindmap";
@@ -44,7 +44,7 @@ export function MindmapViewer({
   mindmapData,
   isLoading,
   isEditable = false,
-  onChange
+  onChange,
 }: MindmapViewerProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState<NodeData>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -52,195 +52,246 @@ export function MindmapViewer({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [editingLabel, setEditingLabel] = useState("");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId: string } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+  } | null>(null);
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   // MindmapNode IDからReact Flow NodeへのマッピングMap
   const [nodeIdMap, setNodeIdMap] = useState<Map<string, string>>(new Map());
 
-  const convertToReactFlowNodes = useCallback((data: MindmapData): {
-    nodes: Node<NodeData>[];
-    edges: Edge[];
-    idMap: Map<string, string>;
-  } => {
-    const nodes: Node<NodeData>[] = [];
-    const edges: Edge[] = [];
-    const idMap = new Map<string, string>();
-    let nodeCounter = 0;
-
-    // 左から右への横方向レイアウト
-    const processNode = (
-      node: MindmapNode,
-      level: number,
-      parentFlowId: string | null,
-      parentX: number,
-      parentY: number,
-      siblingIndex: number,
-      totalSiblings: number
-    ) => {
-      const flowId = `flow-node-${nodeCounter++}`;
-      idMap.set(node.id, flowId);
+  const convertToReactFlowNodes = useCallback(
+    (
+      data: MindmapData
+    ): {
+      nodes: Node<NodeData>[];
+      edges: Edge[];
+      idMap: Map<string, string>;
+    } => {
+      const nodes: Node<NodeData>[] = [];
+      const edges: Edge[] = [];
+      const idMap = new Map<string, string>();
+      let nodeCounter = 0;
 
       const horizontalSpacing = 300; // 階層間の横方向の間隔
-      const verticalSpacing = 100;   // 同階層の縦方向の間隔
+      const verticalSpacing = 60; // ノード間の最小縦方向の間隔
+      const nodeHeight = 60; // 各ノードの高さの推定値
 
-      // X座標は階層に応じて右に移動
-      const x = level * horizontalSpacing;
+      // サブツリー全体の高さを計算する関数
+      const calculateSubtreeHeight = (node: MindmapNode): number => {
+        if (!node.children || node.children.length === 0) {
+          return nodeHeight;
+        }
+        // 子ノードのサブツリーの高さの合計 + 間隔
+        const childrenHeight = node.children.reduce((sum, child) => {
+          return sum + calculateSubtreeHeight(child);
+        }, 0);
+        const spacingHeight = (node.children.length - 1) * verticalSpacing;
+        return Math.max(nodeHeight, childrenHeight + spacingHeight);
+      };
 
-      // Y座標は兄弟ノードの中での位置に基づいて計算
-      let y: number;
-      if (level === 0) {
-        // ルートノードは縦方向の中央
-        y = 0;
-      } else {
-        // 兄弟ノードを縦方向に均等配置
-        const totalHeight = (totalSiblings - 1) * verticalSpacing;
-        const startY = parentY - totalHeight / 2;
-        y = startY + siblingIndex * verticalSpacing;
-      }
+      // 左から右への横方向レイアウト
+      const processNode = (
+        node: MindmapNode,
+        level: number,
+        parentFlowId: string | null,
+        yOffset: number
+      ): number => {
+        const flowId = `flow-node-${nodeCounter++}`;
+        idMap.set(node.id, flowId);
 
-      const colors = [
-        { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" },
-        { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" },
-        { bg: "#ec4899", border: "#db2777", text: "#ffffff" },
-        { bg: "#f59e0b", border: "#d97706", text: "#ffffff" },
-        { bg: "#10b981", border: "#059669", text: "#ffffff" },
-      ];
-      const color = colors[Math.min(level, colors.length - 1)];
+        // X座標は階層に応じて右に移動（左から右へ）
+        const x = level * horizontalSpacing;
 
-      nodes.push({
-        id: flowId,
-        type: "default",
-        position: { x, y },
-        data: {
-          label: node.label,
-          mindmapId: node.id,
-          level,
-        },
-        sourcePosition: Position.Right,  // このノードから出る線は右側
-        targetPosition: Position.Left,   // このノードに入る線は左側
-        style: {
-          background: color.bg,
-          color: color.text,
-          border: `2px solid ${color.border}`,
-          borderRadius: "8px",
-          padding: "10px 20px",
-          fontSize: level === 0 ? "16px" : "14px",
-          fontWeight: level === 0 ? "bold" : "normal",
-          minWidth: "150px",
-          textAlign: "center",
-          cursor: editMode ? "pointer" : "grab",
-        },
-      });
+        // サブツリーの高さを計算
+        const subtreeHeight = calculateSubtreeHeight(node);
 
-      if (parentFlowId) {
-        edges.push({
-          id: `edge-${parentFlowId}-${flowId}`,
-          source: parentFlowId,
-          target: flowId,
-          type: "smoothstep",
-          animated: level === 1,
+        // このノードのY座標は、サブツリーの中央に配置
+        const y = yOffset + subtreeHeight / 2 - nodeHeight / 2;
+
+        const colors = [
+          { bg: "#3b82f6", border: "#2563eb", text: "#ffffff" },
+          { bg: "#8b5cf6", border: "#7c3aed", text: "#ffffff" },
+          { bg: "#ec4899", border: "#db2777", text: "#ffffff" },
+          { bg: "#f59e0b", border: "#d97706", text: "#ffffff" },
+          { bg: "#10b981", border: "#059669", text: "#ffffff" },
+        ];
+        const color = colors[Math.min(level, colors.length - 1)];
+
+        nodes.push({
+          id: flowId,
+          type: "default",
+          position: { x, y },
+          sourcePosition: Position.Right, // このノードから右側に線が出る
+          targetPosition: Position.Left, // このノードへ左側から線が入る
+          data: {
+            label: node.label,
+            mindmapId: node.id,
+            level,
+          },
           style: {
-            stroke: color.border,
-            strokeWidth: 2,
+            background: color.bg,
+            color: color.text,
+            border: `2px solid ${color.border}`,
+            borderRadius: "8px",
+            padding: "10px 20px",
+            fontSize: level === 0 ? "16px" : "14px",
+            fontWeight: level === 0 ? "bold" : "normal",
+            minWidth: "150px",
+            textAlign: "center",
+            cursor: editMode ? "pointer" : "grab",
           },
         });
-      }
 
-      if (node.children && node.children.length > 0) {
-        node.children.forEach((child, index) => {
-          processNode(child, level + 1, flowId, x, y, index, node.children!.length);
-        });
-      }
-    };
+        if (parentFlowId) {
+          edges.push({
+            id: `edge-${parentFlowId}-${flowId}`,
+            source: parentFlowId,
+            target: flowId,
+            type: "smoothstep",
+            animated: level === 1,
+            style: {
+              stroke: color.border,
+              strokeWidth: 2,
+            },
+          });
+        }
 
-    processNode(data.root, 0, null, 0, 0, 0, 1);
-    return { nodes, edges, idMap };
-  }, [editMode]);
+        // 子ノードを配置
+        if (node.children && node.children.length > 0) {
+          let currentY = yOffset;
+          node.children.forEach((child) => {
+            const childSubtreeHeight = calculateSubtreeHeight(child);
+            currentY = processNode(child, level + 1, flowId, currentY);
+            currentY += verticalSpacing; // 次の兄弟との間隔
+          });
+        }
+
+        // このサブツリーが使用した高さを返す
+        return yOffset + subtreeHeight;
+      };
+
+      processNode(data.root, 0, null, 0);
+      return { nodes, edges, idMap };
+    },
+    [editMode]
+  );
 
   useEffect(() => {
     if (mindmapData) {
-      const { nodes: newNodes, edges: newEdges, idMap } = convertToReactFlowNodes(mindmapData);
+      const {
+        nodes: newNodes,
+        edges: newEdges,
+        idMap,
+      } = convertToReactFlowNodes(mindmapData);
       setNodes(newNodes);
       setEdges(newEdges);
       setNodeIdMap(idMap);
     }
   }, [mindmapData, convertToReactFlowNodes, setNodes, setEdges]);
 
-  const findNodeById = useCallback((data: MindmapNode, id: string): MindmapNode | null => {
-    if (data.id === id) return data;
-    if (data.children) {
-      for (const child of data.children) {
-        const found = findNodeById(child, id);
-        if (found) return found;
+  const findNodeById = useCallback(
+    (data: MindmapNode, id: string): MindmapNode | null => {
+      if (data.id === id) return data;
+      if (data.children) {
+        for (const child of data.children) {
+          const found = findNodeById(child, id);
+          if (found) return found;
+        }
       }
-    }
-    return null;
-  }, []);
+      return null;
+    },
+    []
+  );
 
-  const updateNodeLabel = useCallback((data: MindmapNode, id: string, newLabel: string): MindmapNode => {
-    if (data.id === id) {
-      return { ...data, label: newLabel };
-    }
-    if (data.children) {
-      return {
-        ...data,
-        children: data.children.map(child => updateNodeLabel(child, id, newLabel))
-      };
-    }
-    return data;
-  }, []);
+  const updateNodeLabel = useCallback(
+    (data: MindmapNode, id: string, newLabel: string): MindmapNode => {
+      if (data.id === id) {
+        return { ...data, label: newLabel };
+      }
+      if (data.children) {
+        return {
+          ...data,
+          children: data.children.map((child) =>
+            updateNodeLabel(child, id, newLabel)
+          ),
+        };
+      }
+      return data;
+    },
+    []
+  );
 
-  const addChildNode = useCallback((data: MindmapNode, parentId: string): MindmapNode => {
-    if (data.id === parentId) {
-      const newChild: MindmapNode = {
-        id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        label: "新しいノード",
-        children: []
-      };
-      return {
-        ...data,
-        children: [...(data.children || []), newChild]
-      };
-    }
-    if (data.children) {
-      return {
-        ...data,
-        children: data.children.map(child => addChildNode(child, parentId))
-      };
-    }
-    return data;
-  }, []);
+  const addChildNode = useCallback(
+    (data: MindmapNode, parentId: string): MindmapNode => {
+      if (data.id === parentId) {
+        const newChild: MindmapNode = {
+          id: `node-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          label: "新しいノード",
+          children: [],
+        };
+        return {
+          ...data,
+          children: [...(data.children || []), newChild],
+        };
+      }
+      if (data.children) {
+        return {
+          ...data,
+          children: data.children.map((child) => addChildNode(child, parentId)),
+        };
+      }
+      return data;
+    },
+    []
+  );
 
-  const deleteNode = useCallback((data: MindmapNode, id: string): MindmapNode | null => {
-    if (data.id === id) return null;
-    if (data.children) {
-      const filteredChildren = data.children
-        .map(child => deleteNode(child, id))
-        .filter((child): child is MindmapNode => child !== null);
-      return { ...data, children: filteredChildren };
-    }
-    return data;
-  }, []);
+  const deleteNode = useCallback(
+    (data: MindmapNode, id: string): MindmapNode | null => {
+      if (data.id === id) return null;
+      if (data.children) {
+        const filteredChildren = data.children
+          .map((child) => deleteNode(child, id))
+          .filter((child): child is MindmapNode => child !== null);
+        return { ...data, children: filteredChildren };
+      }
+      return data;
+    },
+    []
+  );
 
-  const handleNodeDoubleClick: NodeMouseHandler = useCallback((event, node) => {
-    if (!editMode || !isEditable) return;
-    const nodeData = node.data as NodeData;
-    setEditingNodeId(nodeData.mindmapId);
-    setEditingLabel(nodeData.label);
-  }, [editMode, isEditable]);
+  const handleNodeDoubleClick: NodeMouseHandler = useCallback(
+    (event, node) => {
+      if (!editMode || !isEditable) return;
+      const nodeData = node.data as NodeData;
+      setEditingNodeId(nodeData.mindmapId);
+      setEditingLabel(nodeData.label);
+    },
+    [editMode, isEditable]
+  );
 
-  const handleNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
-    if (!editMode || !isEditable) return;
-    event.preventDefault();
-    const nodeData = node.data as NodeData;
-    setContextMenu({ x: event.clientX, y: event.clientY, nodeId: nodeData.mindmapId });
-    setSelectedNodeId(nodeData.mindmapId);
-  }, [editMode, isEditable]);
+  const handleNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (!editMode || !isEditable) return;
+      event.preventDefault();
+      const nodeData = node.data as NodeData;
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        nodeId: nodeData.mindmapId,
+      });
+      setSelectedNodeId(nodeData.mindmapId);
+    },
+    [editMode, isEditable]
+  );
 
   const handleSaveEdit = useCallback(() => {
     if (!editingNodeId || !mindmapData || !onChange) return;
-    const updatedData = { root: updateNodeLabel(mindmapData.root, editingNodeId, editingLabel) };
+    const updatedData = {
+      root: updateNodeLabel(mindmapData.root, editingNodeId, editingLabel),
+    };
     onChange(updatedData);
     setEditingNodeId(null);
     setEditingLabel("");
@@ -248,13 +299,20 @@ export function MindmapViewer({
 
   const handleAddChild = useCallback(() => {
     if (!selectedNodeId || !mindmapData || !onChange) return;
-    const updatedData = { root: addChildNode(mindmapData.root, selectedNodeId) };
+    const updatedData = {
+      root: addChildNode(mindmapData.root, selectedNodeId),
+    };
     onChange(updatedData);
     setContextMenu(null);
   }, [selectedNodeId, mindmapData, onChange, addChildNode]);
 
   const handleDelete = useCallback(() => {
-    if (!selectedNodeId || !mindmapData || !onChange || selectedNodeId === mindmapData.root.id) {
+    if (
+      !selectedNodeId ||
+      !mindmapData ||
+      !onChange ||
+      selectedNodeId === mindmapData.root.id
+    ) {
       alert("ルートノードは削除できません");
       return;
     }
@@ -285,7 +343,9 @@ export function MindmapViewer({
 
   const exportAsPNG = useCallback(() => {
     if (!reactFlowWrapper.current) return;
-    const element = reactFlowWrapper.current.querySelector(".react-flow__viewport") as HTMLElement;
+    const element = reactFlowWrapper.current.querySelector(
+      ".react-flow__viewport"
+    ) as HTMLElement;
     if (!element) return;
 
     toPng(element, {
@@ -317,7 +377,9 @@ export function MindmapViewer({
     return (
       <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
         <div className="text-6xl mb-4">🗺️</div>
-        <p className="text-lg">要件を入力してマインドマップを生成してください</p>
+        <p className="text-lg">
+          要件を入力してマインドマップを生成してください
+        </p>
       </div>
     );
   }
@@ -339,7 +401,11 @@ export function MindmapViewer({
               }`}
               title="編集モード"
             >
-              {editMode ? <Save className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+              {editMode ? (
+                <Save className="w-4 h-4" />
+              ) : (
+                <Edit3 className="w-4 h-4" />
+              )}
               {editMode ? "編集中" : "編集"}
             </button>
           )}
@@ -362,7 +428,11 @@ export function MindmapViewer({
         </div>
       </div>
 
-      <div ref={reactFlowWrapper} className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 relative" style={{ minHeight: "500px" }}>
+      <div
+        ref={reactFlowWrapper}
+        className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 relative"
+        style={{ minHeight: "500px" }}
+      >
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -377,12 +447,17 @@ export function MindmapViewer({
           <Controls />
           <MiniMap
             nodeColor={(node) => {
-              return node.style?.background as string || "#3b82f6";
+              return (node.style?.background as string) || "#3b82f6";
             }}
           />
-          <Panel position="top-right" className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg text-sm text-gray-600 dark:text-gray-300">
+          <Panel
+            position="top-right"
+            className="bg-white dark:bg-gray-800 p-2 rounded-lg shadow-lg text-sm text-gray-600 dark:text-gray-300"
+          >
             <div>
-              {editMode ? "✏️ ダブルクリックで編集、右クリックでメニュー" : "💡 ドラッグで移動、マウスホイールでズーム"}
+              {editMode
+                ? "✏️ ダブルクリックで編集、右クリックでメニュー"
+                : "💡 ドラッグで移動、マウスホイールでズーム"}
             </div>
           </Panel>
         </ReactFlow>
