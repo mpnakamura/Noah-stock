@@ -92,7 +92,7 @@ export default function Home() {
           </header>
 
           {/* マインドマップ表示エリア */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6" style={{ minHeight: "600px" }}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6" style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}>
             {mindmapData && !isLoading && (
               <div className="flex items-center gap-2 mb-4">
                 <button
@@ -111,12 +111,14 @@ export default function Home() {
               </div>
             )}
 
-            <MindmapViewer
-              mindmapData={mindmapData}
-              isLoading={isLoading}
-              isEditable={true}
-              onChange={handleMindmapChange}
-            />
+            <div style={{ height: mindmapData ? "calc(100% - 60px)" : "100%" }}>
+              <MindmapViewer
+                mindmapData={mindmapData}
+                isLoading={isLoading}
+                isEditable={true}
+                onChange={handleMindmapChange}
+              />
+            </div>
           </div>
         </div>
       </div>
