@@ -171,6 +171,14 @@ export const pmTemplates: Template[] = [
               { id: "lr-1", label: "マイナーなUI不具合", children: [] },
             ],
           },
+          {
+            id: "mitigation",
+            label: "🛡️ リスク軽減策",
+            children: [
+              { id: "mit-1", label: "定期的なリスクレビュー", children: [] },
+              { id: "mit-2", label: "コンティンジェンシープラン策定", children: [] },
+            ],
+          },
         ],
       },
     },
