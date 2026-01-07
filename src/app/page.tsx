@@ -12,6 +12,7 @@ export default function Home() {
   const [mindmapData, setMindmapData] = useState<MindmapData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentId, setCurrentId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const handleGenerate = async (requirements: string) => {
     setIsLoading(true);
@@ -75,10 +76,11 @@ export default function Home() {
         onTemplateSelect={handleTemplateSelect}
         onLoadFromHistory={handleLoadFromHistory}
         isLoading={isLoading}
+        onOpenChange={setSidebarOpen}
       />
 
       {/* メインコンテンツ */}
-      <div className="transition-all duration-300 pl-0 lg:pl-0">
+      <div className={`transition-all duration-300 ${sidebarOpen ? 'pl-[380px]' : 'pl-0'}`}>
         <div className="container mx-auto px-4 py-8">
           <header className="mb-8 text-center">
             <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">

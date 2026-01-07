@@ -12,6 +12,7 @@ interface SidebarProps {
   onTemplateSelect: (template: Template) => void;
   onLoadFromHistory: (mindmap: SavedMindmap) => void;
   isLoading: boolean;
+  onOpenChange?: (isOpen: boolean) => void;
 }
 
 export function Sidebar({
@@ -19,8 +20,14 @@ export function Sidebar({
   onTemplateSelect,
   onLoadFromHistory,
   isLoading,
+  onOpenChange,
 }: SidebarProps) {
   const [isOpen, setIsOpen] = useState(true);
+
+  const toggleOpen = (value: boolean) => {
+    setIsOpen(value);
+    onOpenChange?.(value);
+  };
 
   return (
     <>
@@ -37,7 +44,7 @@ export function Sidebar({
               メニュー
             </h2>
             <button
-              onClick={() => setIsOpen(false)}
+              onClick={() => toggleOpen(false)}
               className="lg:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -63,7 +70,7 @@ export function Sidebar({
 
       {/* トグルボタン */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => toggleOpen(!isOpen)}
         className={`fixed top-4 z-50 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-r-lg shadow-lg transition-all duration-300 ${
           isOpen ? "left-[380px]" : "left-0"
         }`}
@@ -80,7 +87,7 @@ export function Sidebar({
       {isOpen && (
         <div
           className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setIsOpen(false)}
+          onClick={() => toggleOpen(false)}
         />
       )}
     </>
