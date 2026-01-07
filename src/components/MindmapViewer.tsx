@@ -69,7 +69,6 @@ export function MindmapViewer({
 
     // 四方向のレイアウト用の方向定義
     type Direction = 'top' | 'right' | 'bottom' | 'left';
-    const directions: Direction[] = ['right', 'bottom', 'left', 'top'];
 
     const processNode = (
       node: MindmapNode,
@@ -79,13 +78,14 @@ export function MindmapViewer({
       parentY: number,
       siblingIndex: number,
       totalSiblings: number,
-      direction?: Direction
+      parentDirection?: Direction
     ) => {
       const flowId = `flow-node-${nodeCounter++}`;
       idMap.set(node.id, flowId);
 
       let x: number;
       let y: number;
+      let currentDirection: Direction | undefined;
 
       if (level === 0) {
         // ルートノードは中央に配置
@@ -94,44 +94,57 @@ export function MindmapViewer({
       } else if (level === 1) {
         // 第1階層は四方向に配置
         const baseDistance = 300;
-        const dir = directions[siblingIndex % 4];
 
-        switch (dir) {
+        // 子ノードの総数に応じて方向を割り当て
+        const angle = (siblingIndex / totalSiblings) * Math.PI * 2;
+        const directions: Direction[] = ['right', 'bottom', 'left', 'top'];
+
+        // より均等に配置するため、角度ベースで方向を決定
+        if (totalSiblings <= 4) {
+          // 4つ以下の場合は、順番に4方向に配置
+          currentDirection = directions[siblingIndex % 4];
+        } else {
+          // 5つ以上の場合は、角度に基づいて方向を決定
+          const dirIndex = Math.floor((angle / (Math.PI * 2)) * 4);
+          currentDirection = directions[dirIndex % 4];
+        }
+
+        switch (currentDirection) {
           case 'top':
-            x = parentX;
+            x = parentX + (siblingIndex % 2 === 0 ? -50 : 50);
             y = parentY - baseDistance;
             break;
           case 'right':
             x = parentX + baseDistance;
-            y = parentY;
+            y = parentY + (siblingIndex % 2 === 0 ? -50 : 50);
             break;
           case 'bottom':
-            x = parentX;
+            x = parentX + (siblingIndex % 2 === 0 ? -50 : 50);
             y = parentY + baseDistance;
             break;
           case 'left':
             x = parentX - baseDistance;
-            y = parentY;
+            y = parentY + (siblingIndex % 2 === 0 ? -50 : 50);
             break;
         }
-        direction = dir;
       } else {
         // 第2階層以降は親の方向に沿って配置
+        currentDirection = parentDirection;
         const horizontalSpacing = 250;
         const verticalSpacing = 120;
 
-        if (direction === 'top' || direction === 'bottom') {
+        if (currentDirection === 'top' || currentDirection === 'bottom') {
           // 上下方向の場合は横に広がる
           const totalWidth = (totalSiblings - 1) * verticalSpacing;
           const startX = parentX - totalWidth / 2;
           x = startX + siblingIndex * verticalSpacing;
-          y = direction === 'top' ? parentY - horizontalSpacing : parentY + horizontalSpacing;
+          y = currentDirection === 'top' ? parentY - horizontalSpacing : parentY + horizontalSpacing;
         } else {
           // 左右方向の場合は縦に広がる
           const totalHeight = (totalSiblings - 1) * verticalSpacing;
           const startY = parentY - totalHeight / 2;
           y = startY + siblingIndex * verticalSpacing;
-          x = direction === 'right' ? parentX + horizontalSpacing : parentX - horizontalSpacing;
+          x = currentDirection === 'right' ? parentX + horizontalSpacing : parentX - horizontalSpacing;
         }
       }
 
@@ -183,12 +196,12 @@ export function MindmapViewer({
 
       if (node.children && node.children.length > 0) {
         node.children.forEach((child, index) => {
-          processNode(child, level + 1, flowId, x, y, index, node.children!.length, direction);
+          processNode(child, level + 1, flowId, x, y, index, node.children!.length, currentDirection);
         });
       }
     };
 
-    processNode(data.root, 0, null, 0, 0, 0, 1);
+    processNode(data.root, 0, null, 0, 0, 0, 1, undefined);
     return { nodes, edges, idMap };
   }, [editMode]);
 

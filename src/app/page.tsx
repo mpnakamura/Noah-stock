@@ -81,18 +81,9 @@ export default function Home() {
 
       {/* メインコンテンツ */}
       <div className={`transition-all duration-300 ${sidebarOpen ? 'pl-[380px]' : 'pl-0'}`}>
-        <div className="container mx-auto px-4 py-8">
-          <header className="mb-8 text-center">
-            <h1 className="text-4xl font-bold text-gray-800 dark:text-white mb-2">
-              🎯 AI PM Assistant
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300">
-              PM業務を支援する対話型マインドマップツール
-            </p>
-          </header>
-
+        <div className="h-screen p-4">
           {/* マインドマップ表示エリア */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6" style={{ height: "calc(100vh - 200px)", minHeight: "600px" }}>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 h-full">
             {mindmapData && !isLoading && (
               <div className="flex items-center gap-2 mb-4">
                 <button
@@ -111,7 +102,7 @@ export default function Home() {
               </div>
             )}
 
-            <div style={{ height: mindmapData ? "calc(100% - 60px)" : "100%" }}>
+            <div className="h-full" style={{ height: mindmapData ? "calc(100% - 60px)" : "100%" }}>
               <MindmapViewer
                 mindmapData={mindmapData}
                 isLoading={isLoading}
